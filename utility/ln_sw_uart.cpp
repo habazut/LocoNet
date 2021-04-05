@@ -45,6 +45,7 @@
 #include "LocoNet.h"
 #include "ln_buf.h"    
 #include "ln_sw_uart.h"    
+#include "../../CommandStation-EX/MotorDriver.h"
 
 volatile uint8_t  lnState ;
 volatile uint8_t  lnBitCount ;
@@ -63,10 +64,20 @@ uint8_t           txPin;
 #define LN_TX_PORT *txPort
 #define LN_TX_BIT txPin
 
+#define setHIGH(fastpin)  *fastpin.inout |= fastpin.maskHIGH
+#define setLOW(fastpin)   *fastpin.inout &= fastpin.maskLOW
+FASTPIN diagPin;
 void setTxPortAndPin(volatile uint8_t *newTxPort, uint8_t newTxPin)
 {
   txPort = newTxPort;
   txPin = newTxPin;
+    pinMode(22,OUTPUT);
+  {
+    uint8_t port = digitalPinToPort(22);
+    diagPin.inout = portOutputRegister(port);
+    diagPin.maskHIGH = digitalPinToBitMask(22);
+    diagPin.maskLOW = ~diagPin.maskHIGH;
+  }
 }
 
 /**************************************************************************
@@ -114,12 +125,14 @@ ISR(LN_SB_SIGNAL)
  **************************************************************************/
 ISR(LN_TMR_SIGNAL)     /* signal handler for timer0 overflow */
 {
+  setHIGH(diagPin);
   // Advance the Compare Target by a bit period
   lnCompareTarget += LN_TIMER_RX_RELOAD_PERIOD;
   LN_TMR_OUTP_CAPT_REG = lnCompareTarget;
 
   lnBitCount++;                // Increment bit_counter
 
+  setLOW(diagPin);
   if( lnState == LN_ST_RX ) {  // Are we in RX mode
     if( lnBitCount < 9)  {   // Are we in the Stop Bits phase
       lnCurrentByte >>= 1;
@@ -139,6 +152,7 @@ ISR(LN_TMR_SIGNAL)     /* signal handler for timer0 overflow */
     sbi( LN_SB_INT_ENABLE_REG, LN_SB_INT_ENABLE_BIT ) ;
 
     // If the Stop bit is not Set then we have a Framing Error
+////    Serial.print(lnCurrentByte, HEX);
 #ifdef LN_SW_UART_RX_INVERTED  
     if( bit_is_set(LN_RX_PORT,LN_RX_BIT) ) {
 #else
@@ -146,9 +160,11 @@ ISR(LN_TMR_SIGNAL)     /* signal handler for timer0 overflow */
 #endif		
       // ERROR_LED_ON();
       lnRxBuffer->Stats.RxErrors++ ;
+////      Serial.print("!");
     } 
     else { // Put the received byte in the buffer
-      addByteLnBuf( lnRxBuffer, lnCurrentByte ) ;
+      //addByteLnBuf( lnRxBuffer, lnCurrentByte ) ;
+////      Serial.print("_");
     }
     lnBitCount = 0 ;
     lnState = LN_ST_CD_BACKOFF ;

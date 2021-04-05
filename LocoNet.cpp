@@ -104,6 +104,7 @@ const char* LocoNetClass::getStatusStr(LN_STATUS Status)
 
 void LocoNetClass::init(uint8_t txPin)
 {
+  Serial3.begin(16666);
   initLnBuf(&LnBuffer) ;
   setTxPin(txPin);
   initLocoNetHardware(&LnBuffer);
@@ -145,8 +146,22 @@ uint8_t LocoNetClass::length(void)
 		return 0;
 }
 
+extern volatile uint8_t  lnState ;
+
 lnMsg* LocoNetClass::receive(void)
 {
+  uint8_t c;
+  while (Serial3.available()) {
+    c = Serial3.read();
+    Serial.print(c, HEX);
+    if( lnState == LN_ST_RX ) {  // Are we in RX mode
+      Serial.print("+");
+      addByteLnBuf(&LnBuffer, c);
+    } else {
+      Serial.print("-");
+      addByteLnBuf(&LnBuffer, c);
+    }
+  }
   return recvLnMsg(&LnBuffer);
 }
 
